@@ -2,7 +2,7 @@ Summary:	Hexago's TSP Client
 Summary(pl):	Klient TSP Hexago
 Name:		freenet6-client
 Version:	1.0
-Release:	1
+Release:	2
 License:	HPL 1.0
 Group:		Applications/System
 Vendor:		Hexago
@@ -12,6 +12,7 @@ Source0:	http://www.kernel.pl/~djurban/pld/%{name}-%{version}.tgz
 Source1:	freenet6.init
 Source2:	tspc.conf
 Patch0: 	%{name}-paths.patch
+Patch1: 	%{name}-play-nice.patch
 URL:		http://www.freenet6.net
 Requires:	glibc >= 2.2.1
 Requires:	iproute2 >= 2.2.4
@@ -78,6 +79,7 @@ IPv6 po sieci IPv4 (Internecie).
 %prep
 %setup -q
 %patch0 -p1
+%patch1 -p1
 
 %build
 %{__make} all \
@@ -96,7 +98,7 @@ install -d $RPM_BUILD_ROOT{%{_sysconfdir}/tspc,%{_initrddir}}
 	install_man=$RPM_BUILD_ROOT%{_mandir} \
 	install_template=$RPM_BUILD_ROOT%{_datadir}/tspc
 
-install %{SOURCE1} $RPM_BUILD_ROOT%{_initrddir}
+install %{SOURCE1} $RPM_BUILD_ROOT%{_initrddir}/freenet6
 install %{SOURCE2} $RPM_BUILD_ROOT%{_sysconfdir}/tspc
 
 %clean
@@ -114,3 +116,19 @@ rm -rf $RPM_BUILD_ROOT
 %{_datadir}/tspc/linux.sh
 %{_mandir}/man5/*
 %{_mandir}/man8/*
+
+%post
+/sbin/chkconfig --add freenet6
+if [ -f /var/lock/subsys/freenet6 ]; then
+	/etc/rc.d/init.d/freenet6 restart 1>&2
+else
+	echo "Run \"/etc/rc.d/init.d/freenet6 start\" to start freenet6 connection"
+fi
+
+%preun
+if [ "$1" = "0" ]; then
+	if [ -f /var/lock/subsys/freenet6 ]; then
+		/etc/rc.d/init.d/freenet6 stop 1>&2
+	fi
+	/sbin/chkconfig --del freenet6
+fi
