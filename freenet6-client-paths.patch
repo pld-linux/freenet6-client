@@ -1,0 +1,42 @@
+--- freenet6-client-1.0/src/tspc.c.orig	2003-09-28 15:42:46.000000000 +0200
++++ freenet6-client-1.0/src/tspc.c	2003-09-28 16:07:29.000000000 +0200
+@@ -56,7 +56,8 @@
+ 
+ char *FileName  = "tspc.conf";
+ char *LogFile   = "tspc.log";
+-char *ScriptDir = NULL;
++char *ScriptDir = "/usr/share/tspc";
++char *FScriptDir = "/usr/share/tspc";
+ char *LogFileName = NULL;
+ tConf Conf;
+ tTunnel t;
+@@ -73,7 +74,7 @@
+    int  RootUid = 0;
+ #  define ScriptExtension "bat"
+ #else
+-   char *TspHomeDir  = "/usr/local/etc/tsp";
++   char *TspHomeDir  = "/etc/tsp";
+    char DirSeparator = '/';
+    int  RootUid = 0;
+ #  define ScriptInterpretor "/bin/sh "
+@@ -640,9 +641,9 @@
+   SetEnv("TSP_HOME_DIR",          TspHomeDir, 1);
+ 
+ #ifdef WIN32
+-  snprintf(buf, sizeof buf, "%s%c%s.%s", ScriptDir, DirSeparator, Conf.template, ScriptExtension);
++  snprintf(buf, sizeof buf, "%s%c%s.%s", FScriptDir, DirSeparator, Conf.template, ScriptExtension);
+ #else
+-  snprintf(buf, sizeof buf, "%s %s%c%s.%s", ScriptInterpretor, ScriptDir, DirSeparator, Conf.template, ScriptExtension);
++  snprintf(buf, sizeof buf, "%s %s%c%s.%s", ScriptInterpretor, FScriptDir, DirSeparator, Conf.template, ScriptExtension);
+ #endif
+ 
+   Display(2, ELInfo, "SetUpInterface", "Executing configuration script.\n");
+@@ -755,7 +756,7 @@
+ {
+   int status=1;
+ 
+-  LogInit("TSPClient", LogFile);  
++  LogInit("TSPClient", "/var/log/tspc-client");  
+   Display(1,ELInfo, "main", "----- TSP Client Version %s Initializing -------------------------", TSP_VERSION);
+ 
+   if((status = Initialise(argc, argv, &Conf)) != 0)
