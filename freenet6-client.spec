@@ -7,7 +7,7 @@ License:	HPL 1.0
 Group:		Applications/System
 Vendor:		Hexago
 # http://www.freenet6.net/cgi-bin/download.cgi?fn=freenet6-client-1.0.tgz
-Source0:	http://www.kernel.pl/~djurban/pld/%{name}-%{version}.tgz
+Source0:	http://ep09.pld-linux.org/~djurban/pld/%{name}-%{version}.tgz
 # Source0-md5:	382450da40cd4334f39e4cad99c583ae
 Source1:	freenet6.init
 Source2:	tspc.conf
