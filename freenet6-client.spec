@@ -80,28 +80,24 @@ IPv6 po sieci IPv4 (Internecie).
 %patch0 -p1
 
 %build
-CFLAGS="%{rpmcflags}" \
 %{__make} all \
+	CC="%{__cc} %{rpmcflags} -I\$(INC) -Wall" \
 	target=linux \
-	installdir=$RPM_BUILD_ROOT
+	installdir=%{_prefix}
 
 %install
 rm -rf $RPM_BUILD_ROOT
+install -d $RPM_BUILD_ROOT{%{_sysconfdir}/tspc,%{_initrddir}}
 
 %{__make} install \
 	target=linux \
-	installdir=$RPM_BUILD_ROOT
+	installdir=$RPM_BUILD_ROOT%{_prefix} \
+	install_bin=$RPM_BUILD_ROOT%{_sbindir} \
+	install_man=$RPM_BUILD_ROOT%{_mandir} \
+	install_template=$RPM_BUILD_ROOT%{_datadir}/tspc
 
-install -d $RPM_BUILD_ROOT{%{_datadir},%{_sysconfdir}}/tspc
-install -d $RPM_BUILD_ROOT{%{_initrddir},%{_sbindir}}
-install -d $RPM_BUILD_ROOT%{_mandir}/man{5,8}
-
-mv $RPM_BUILD_ROOT/template/linux.sh $RPM_BUILD_ROOT%{_datadir}/tspc
-mv $RPM_BUILD_ROOT/template/checktunnel.sh $RPM_BUILD_ROOT%{_datadir}/tspc
+install %{SOURCE1} $RPM_BUILD_ROOT%{_initrddir}
 install %{SOURCE2} $RPM_BUILD_ROOT%{_sysconfdir}/tspc
-cp $RPM_BUILD_ROOT/man/man5/tspc.conf.5 $RPM_BUILD_ROOT%{_mandir}/man5
-cp $RPM_BUILD_ROOT/man/man8/tspc.8 $RPM_BUILD_ROOT%{_mandir}/man8
-mv $RPM_BUILD_ROOT/bin/tspc $RPM_BUILD_ROOT%{_sbindir}
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -113,6 +109,8 @@ rm -rf $RPM_BUILD_ROOT
 %dir %{_sysconfdir}/tspc
 %{_sysconfdir}/tspc/tspc.conf
 %attr(754,root,root) %{_initrddir}/*
-%{_datadir}/tspc
+%dir %{_datadir}/tspc
+%{_datadir}/tspc/checktunnel.sh
+%{_datadir}/tspc/linux.sh
 %{_mandir}/man5/*
 %{_mandir}/man8/*
