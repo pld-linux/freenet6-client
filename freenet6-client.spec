@@ -13,7 +13,7 @@ Source1:	freenet6.init
 Source2:	tspc.conf
 Patch0: 	%{name}-paths.patch
 Patch1: 	%{name}-play-nice.patch
-URL:		http://www.freenet6.net
+URL:		http://www.freenet6.net/
 Requires:	glibc >= 2.2.1
 Requires:	iproute2 >= 2.2.4
 Requires:	net-tools >= 1.60
@@ -109,7 +109,7 @@ rm -rf $RPM_BUILD_ROOT
 %doc README LEGAL CONTRIB.txt UPDATES
 %attr(755,root,root) %{_sbindir}/tspc
 %dir %{_sysconfdir}/tspc
-%{_sysconfdir}/tspc/tspc.conf
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/tspc/tspc.conf
 %attr(754,root,root) %{_initrddir}/*
 %dir %{_datadir}/tspc
 %{_datadir}/tspc/checktunnel.sh
