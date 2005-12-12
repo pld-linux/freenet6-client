@@ -11,8 +11,8 @@ Source0:	http://ep09.pld-linux.org/~djurban/pld/%{name}-%{version}.tgz
 # Source0-md5:	382450da40cd4334f39e4cad99c583ae
 Source1:	freenet6.init
 Source2:	tspc.conf
-Patch0: 	%{name}-paths.patch
-Patch1: 	%{name}-play-nice.patch
+Patch0:		%{name}-paths.patch
+Patch1:		%{name}-play-nice.patch
 URL:		http://www.freenet6.net/
 Requires:	glibc >= 2.2.1
 Requires:	iproute2 >= 2.2.4
