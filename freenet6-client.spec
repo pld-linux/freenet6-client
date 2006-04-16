@@ -5,7 +5,6 @@ Version:	1.0
 Release:	2
 License:	HPL 1.0
 Group:		Applications/System
-Vendor:		Hexago
 # http://www.freenet6.net/cgi-bin/download.cgi?fn=freenet6-client-1.0.tgz
 Source0:	http://ep09.pld-linux.org/~djurban/pld/%{name}-%{version}.tgz
 # Source0-md5:	382450da40cd4334f39e4cad99c583ae
@@ -14,10 +13,12 @@ Source2:	tspc.conf
 Patch0:		%{name}-paths.patch
 Patch1:		%{name}-play-nice.patch
 URL:		http://www.freenet6.net/
+Requires(post,preun):	/sbin/chkconfig
 Requires:	glibc >= 2.2.1
 Requires:	iproute2 >= 2.2.4
 Requires:	net-tools >= 1.60
 Requires:	radvd >= 0.6.2
+Requires:	rc-scripts
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
 %description
