@@ -1,5 +1,5 @@
 Summary:	Hexago's TSP Client
-Summary(pl):	Klient TSP Hexago
+Summary(pl.UTF-8):   Klient TSP Hexago
 Name:		freenet6-client
 Version:	1.0
 Release:	2
@@ -49,32 +49,32 @@ model. The protocol could be integrated directly into the operating
 system to provide a service like DHCP but for requesting IPv6
 addresses or prefixes over an IPv4 network (Internet).
 
-%description -l pl
-TSP to nowa inicjatywa zapocz±tkowana przez Hexago - prywatn± firmê z
-Kanady zaanga¿owan± w IPv6 od 1996 roku - aby u³atwiæ szybszy rozwój
-Internetu IPv6. Internet jest rozwiniêty na ca³ym ¶wiecie w oparciu o
-IPv4, wiêc celem tego projektu jest rozwiniêcie IPv6 na wielk± skalê
-poprzez u¿ycie skonfigurowanych tuneli.
+%description -l pl.UTF-8
+TSP to nowa inicjatywa zapoczÄ…tkowana przez Hexago - prywatnÄ… firmÄ™ z
+Kanady zaangaÅ¼owanÄ… w IPv6 od 1996 roku - aby uÅ‚atwiÄ‡ szybszy rozwÃ³j
+Internetu IPv6. Internet jest rozwiniÄ™ty na caÅ‚ym Å›wiecie w oparciu o
+IPv4, wiÄ™c celem tego projektu jest rozwiniÄ™cie IPv6 na wielkÄ… skalÄ™
+poprzez uÅ¼ycie skonfigurowanych tuneli.
 
-Skonfigurowane tunele to metoda przej¶ciowa ustandaryzowana przez IETF
-w celu u¿ywania IPv6 w koegzystencji z IPv4 poprzez pakowanie pakietów
-IPv6 w IPv4. Dowolny host pod³±czony do Internetu po IPv4 maj±cy stos
-IPv6 mo¿e ³±czyæ siê z Internetem IPv6.
+Skonfigurowane tunele to metoda przejÅ›ciowa ustandaryzowana przez IETF
+w celu uÅ¼ywania IPv6 w koegzystencji z IPv4 poprzez pakowanie pakietÃ³w
+IPv6 w IPv4. Dowolny host podÅ‚Ä…czony do Internetu po IPv4 majÄ…cy stos
+IPv6 moÅ¼e Å‚Ä…czyÄ‡ siÄ™ z Internetem IPv6.
 
-Freenet6 rozwijany przez Viagenie w latach 1999-2000 by³ pierwszym
-publicznym serwerem tuneli i jednym z najbardziej u¿ywanych na ¶wiecie
-do automatycznego delegowania pojedynczych adresów IPv6 do dowolnego
-hosta ju¿ pod³±czonego do sieci IPv4 poprzez skonfigurowany tunel po
-zwyk³ym wype³nieniu formularza WWW i uruchomieniu skryptu. TSP
-reprezentuje kolejny bardzo wa¿ny krok do przyspieszenia rozwoju IPv6
-na szersz± skalê.
+Freenet6 rozwijany przez Viagenie w latach 1999-2000 byÅ‚ pierwszym
+publicznym serwerem tuneli i jednym z najbardziej uÅ¼ywanych na Å›wiecie
+do automatycznego delegowania pojedynczych adresÃ³w IPv6 do dowolnego
+hosta juÅ¼ podÅ‚Ä…czonego do sieci IPv4 poprzez skonfigurowany tunel po
+zwykÅ‚ym wypeÅ‚nieniu formularza WWW i uruchomieniu skryptu. TSP
+reprezentuje kolejny bardzo waÅ¼ny krok do przyspieszenia rozwoju IPv6
+na szerszÄ… skalÄ™.
 
-Zamiast interfejsu WWW do ¿±dania skonfigurowanych tuneli i adresów
+Zamiast interfejsu WWW do Å¼Ä…dania skonfigurowanych tuneli i adresÃ³w
 IPv6, TSP jest nowym modelem opartym na komunikacji klient/serwer.
-Protokó³ jest u¿ywany do ¿±dania od pojedynczego adresu IPv6 do
-pe³nego prefiksu IPv6 od klienta do serwera tuneli zgodnie z modelem
-brokera IPv6. Protokó³ mo¿e byæ zintegrowany z systemem operacyjnym,
-aby udostêpniæ us³ugê typu DHCP, ale do ¿±dania adresów lub prefiksów
+ProtokÃ³Å‚ jest uÅ¼ywany do Å¼Ä…dania od pojedynczego adresu IPv6 do
+peÅ‚nego prefiksu IPv6 od klienta do serwera tuneli zgodnie z modelem
+brokera IPv6. ProtokÃ³Å‚ moÅ¼e byÄ‡ zintegrowany z systemem operacyjnym,
+aby udostÄ™pniÄ‡ usÅ‚ugÄ™ typu DHCP, ale do Å¼Ä…dania adresÃ³w lub prefiksÃ³w
 IPv6 po sieci IPv4 (Internecie).
 
 %prep
