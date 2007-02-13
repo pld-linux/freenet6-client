@@ -1,5 +1,5 @@
 Summary:	Hexago's TSP Client
-Summary(pl.UTF-8):   Klient TSP Hexago
+Summary(pl.UTF-8):	Klient TSP Hexago
 Name:		freenet6-client
 Version:	1.0
 Release:	2
