@@ -1,23 +1,22 @@
 Summary:	Hexago's TSP Client
 Summary(pl.UTF-8):	Klient TSP Hexago
 Name:		freenet6-client
-Version:	1.0
-Release:	2
+Version:	4.2.2
+Release:	1
 License:	HPL 1.0
 Group:		Applications/System
-# http://www.freenet6.net/cgi-bin/download.cgi?fn=freenet6-client-1.0.tgz
-Source0:	http://ep09.pld-linux.org/~djurban/pld/%{name}-%{version}.tgz
-# Source0-md5:	382450da40cd4334f39e4cad99c583ae
-Source1:	freenet6.init
-Source2:	tspc.conf
-Patch0:		%{name}-paths.patch
-Patch1:		%{name}-play-nice.patch
+# Source0: http://www.go6.net/4105/file.asp?file_id=80
+Source0:	gw6c4_2_2src.tar.gz
+# Source0-md5:	5e64305e1408b0d3c2c2a5803692eb93
+Source1:	%{name}.init
+Source2:	%{name}.conf
+Patch0:		%{name}-pld.patch
 URL:		http://www.freenet6.net/
 Requires(post,preun):	/sbin/chkconfig
 Requires:	glibc >= 2.2.1
 Requires:	iproute2 >= 2.2.4
 Requires:	net-tools >= 1.60
-Requires:	radvd >= 0.6.2
+#Requires:	radvd >= 0.6.2
 Requires:	rc-scripts
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
@@ -78,9 +77,8 @@ aby udostępnić usługę typu DHCP, ale do żądania adresów lub prefiksów
 IPv6 po sieci IPv4 (Internecie).
 
 %prep
-%setup -q
+%setup -q -n tspc-advanced
 %patch0 -p1
-%patch1 -p1
 
 %build
 %{__make} all \
@@ -90,31 +88,31 @@ IPv6 po sieci IPv4 (Internecie).
 
 %install
 rm -rf $RPM_BUILD_ROOT
-install -d $RPM_BUILD_ROOT{%{_sysconfdir}/tspc,%{_initrddir}}
+install -d $RPM_BUILD_ROOT{%{_sysconfdir}/gw6c,%{_initrddir}}
 
 %{__make} install \
 	target=linux \
 	installdir=$RPM_BUILD_ROOT%{_prefix} \
 	install_bin=$RPM_BUILD_ROOT%{_sbindir} \
 	install_man=$RPM_BUILD_ROOT%{_mandir} \
-	install_template=$RPM_BUILD_ROOT%{_datadir}/tspc
+	install_template=$RPM_BUILD_ROOT%{_datadir}/gw6c/template
 
 install %{SOURCE1} $RPM_BUILD_ROOT%{_initrddir}/freenet6
-install %{SOURCE2} $RPM_BUILD_ROOT%{_sysconfdir}/tspc
+install %{SOURCE2} $RPM_BUILD_ROOT%{_sysconfdir}/gw6c/gw6c.conf
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(644,root,root,755)
-%doc README LEGAL CONTRIB.txt UPDATES
-%attr(755,root,root) %{_sbindir}/tspc
-%dir %{_sysconfdir}/tspc
-%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/tspc/tspc.conf
+%attr(755,root,root) %{_sbindir}/gw6c
+%dir %{_sysconfdir}/gw6c
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/gw6c/gw6c.conf
 %attr(754,root,root) %{_initrddir}/*
-%dir %{_datadir}/tspc
-%{_datadir}/tspc/checktunnel.sh
-%{_datadir}/tspc/linux.sh
+%dir %{_datadir}/gw6c
+%dir %{_datadir}/gw6c/template
+%{_datadir}/gw6c/template/checktunnel.sh
+%{_datadir}/gw6c/template/linux.sh
 %{_mandir}/man5/*
 %{_mandir}/man8/*
 
