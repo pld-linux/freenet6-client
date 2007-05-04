@@ -29,10 +29,7 @@ if is_no "${IPV6_NETWORKING}"; then
 	exit 1
 fi
 
-RETVAL=0
-# See how we were called.
-case "$1" in
-  start)
+start() {
 	# Check if the service is already running?
 	if [ ! -f /var/lock/subsys/freenet6 ]; then
 		msg_starting freenet6
@@ -42,8 +39,9 @@ case "$1" in
 	else
 		msg_already_running freenet6
 	fi
-	;;
-  stop)
+}
+
+stop() {
 	if [ -f /var/lock/subsys/freenet6 ]; then
 		msg_stopping freenet6
 		killproc gw6c
@@ -51,11 +49,20 @@ case "$1" in
 	else
 		msg_not_running freenet6
 	fi
+}
+
+RETVAL=0
+# See how we were called.
+case "$1" in
+  start)
+  	start
+	;;
+  stop)
+  	stop
 	;;
   restart|force-reload)
-	$0 stop
-	$0 start
-	exit $?
+	stop
+	start
 	;;
   status)
 	status freenet6
