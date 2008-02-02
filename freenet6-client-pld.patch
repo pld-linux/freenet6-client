@@ -1,7 +1,7 @@
-diff -ur tspc-advanced-o/platform/linux/tsp_local.c tspc-advanced/platform/linux/tsp_local.c
---- tspc-advanced-o/platform/linux/tsp_local.c	2006-11-29 10:06:38.000000000 -0700
-+++ tspc-advanced/platform/linux/tsp_local.c	2007-04-27 17:35:38.000000000 -0600
-@@ -56,7 +56,7 @@
+diff -Nur tspc-advanced.orig/platform/linux/tsp_local.c tspc-advanced.pld/platform/linux/tsp_local.c
+--- tspc-advanced.orig/platform/linux/tsp_local.c	2007-12-12 13:44:35.000000000 -0700
++++ tspc-advanced.pld/platform/linux/tsp_local.c	2008-02-02 12:54:09.000000000 -0700
+@@ -48,7 +48,7 @@
  char *ScriptInterpretor = "/bin/sh";
  char *ScriptExtension = "sh";
  char *ScriptDir = NULL;
@@ -10,9 +10,308 @@ diff -ur tspc-advanced-o/platform/linux/tsp_local.c tspc-advanced/platform/linux
  char DirSeparator = '/';
  
  int RootUid = 0;
-diff -ur tspc-advanced-o/template/linux.sh tspc-advanced/template/linux.sh
---- tspc-advanced-o/template/linux.sh	2006-11-29 10:06:41.000000000 -0700
-+++ tspc-advanced/template/linux.sh	2007-04-27 17:35:38.000000000 -0600
+diff -Nur tspc-advanced.orig/platform/linux/tsp_local.c.orig tspc-advanced.pld/platform/linux/tsp_local.c.orig
+--- tspc-advanced.orig/platform/linux/tsp_local.c.orig	1969-12-31 17:00:00.000000000 -0700
++++ tspc-advanced.pld/platform/linux/tsp_local.c.orig	2008-02-02 12:53:41.000000000 -0700
+@@ -0,0 +1,295 @@
++/*
++---------------------------------------------------------------------------
++ $Id$
++---------------------------------------------------------------------------
++This source code copyright (c) Hexago Inc. 2002-2007.
++
++  LICENSE NOTICE: You may use and modify this source code only if you
++  have executed a valid license agreement with Hexago Inc. granting
++  you the right to do so, the said license agreement governing such
++  use and modifications.   Copyright or other intellectual property
++  notices are not to be removed from the source code.
++---------------------------------------------------------------------------
++*/
++
++/* LINUX */
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <unistd.h>
++#include <string.h>
++
++#include <sys/types.h>
++#include <sys/wait.h>
++#include <sys/stat.h>
++
++#define _USES_SYS_SOCKET_H_
++#define _USES_ARPA_INET_H_
++
++#include "platform.h"
++
++#include "config.h"         /* tConf */
++#include "xml_tun.h"        /* tTunnel */
++#include "net.h"            /* net_tools_t */
++#include "tsp_net.h"        /* tspClose */
++
++#include "log.h"            // Display
++#include "hex_strings.h"    // Various string constants
++#include "errors.h"         // Error codes.
++
++#include "tsp_tun.h"        // linux tun support
++#include "tsp_client.h"     // tspSetupInterfaceLocal()
++#include "tsp_setup.h"      // tspSetupInterface()
++#include "tsp_tun_mgt.h"    // tspPerformTunnelLoop()
++
++/* these globals are defined by US used by alot of things in  */
++
++char *FileName  = "gw6c.conf";
++char *ScriptInterpretor = "/bin/sh";
++char *ScriptExtension = "sh";
++char *ScriptDir = NULL;
++char *TspHomeDir = "/usr/local/etc/gw6";
++char DirSeparator = '/';
++
++int RootUid = 0;
++int indSigHUP = 0;    // Set to 1 when HUP signal is trapped.
++
++
++#include <gw6cmessaging/gw6cuistrings.h>
++// Dummy implementation for non-win32 targets
++// (Library gw6cmessaging is not linked in non-win32 targets).
++error_t send_status_info( void ) { return GW6CM_UIS__NOERROR; }
++error_t send_tunnel_info( void ) { return GW6CM_UIS__NOERROR; }
++error_t send_broker_list( void ) { return GW6CM_UIS__NOERROR; }
++error_t send_hap6_status_info( void ) { return GW6CM_UIS__NOERROR; }
++
++
++// --------------------------------------------------------------------------
++/* Verify for ipv6 support */
++//
++static int tspTestIPv6Support()
++{
++  struct stat buf;
++  if(stat("/proc/net/if_inet6",&buf) == -1)
++  {
++    Display(LOG_LEVEL_1,ELError,"tspTestIPv6Support",HEX_STR_NO_IPV6_SUPPORT_FOUND);
++    Display(LOG_LEVEL_1,ELError,"tspTestIPv6Support",HEX_STR_TRY_MODPROBE_IPV6);
++    return INTERFACE_SETUP_FAILED;
++  }
++  Display(LOG_LEVEL_2,ELInfo,"tspTestIPv6Support",HEX_STR_IPV6_SUPPORT_FOUND);
++
++  return NO_ERROR;
++}
++
++
++// --------------------------------------------------------------------------
++// linux specific to setup an env variable
++//
++void tspSetEnv(char *Variable, char *Value, int Flag)
++{
++  setenv( Variable, Value, Flag );
++  Display( LOG_LEVEL_3, ELInfo, "tspSetEnv", "%s=%s", Variable, Value );
++}
++
++// --------------------------------------------------------------------------
++// Checks if the Gateway6 Client has been requested to stop and exit.
++//
++// Returns 1 if Gateway6 Client is being requested to stop and exit.
++// Else, waits 'uiWaitMs' miliseconds and returns 0.
++//
++// Defined in tsp_client.h
++//
++int tspCheckForStopOrWait( const unsigned int uiWaitMs )
++{
++  // Sleep for the amount of time specified, if signal has not been sent.
++  if( indSigHUP == 0 )
++  {
++    // usleep is expecting microseconds (1 microsecond = 0.000001 second).
++    usleep( uiWaitMs * 1000 );
++  }
++
++  return indSigHUP;
++}
++
++
++// --------------------------------------------------------------------------
++// Called from tsp_setup.c -> tspSetupInterface
++//   Do extra platform-specific stuff before tunnel script is launched.
++//
++int tspSetupInterfaceLocal( tConf* pConf, tTunnel* pTun )
++{
++  return 0;
++}
++
++
++// --------------------------------------------------------------------------
++// Returns local address.
++// tspSetupTunnel() will callback here
++//
++char* tspGetLocalAddress(int socket, char *buffer, int size)
++{
++  struct sockaddr_in6 addr; /* enough place for v4 and v6 */
++  struct sockaddr_in  *addr_v4 = (struct sockaddr_in *)&addr;
++  struct sockaddr_in6 *addr_v6 = (struct sockaddr_in6 *)&addr;
++  socklen_t len;
++
++  len = sizeof addr;
++  if (getsockname(socket, (struct sockaddr *)&addr, &len) < 0)
++  {
++    Display(LOG_LEVEL_3, ELError, "TryServer", HEX_STR_ERR_FIND_SRC_IP);
++    return NULL;
++  }
++
++  if (addr.sin6_family == AF_INET6)
++    return (char *)inet_ntop(AF_INET6, (const void*) &addr_v6->sin6_addr, buffer, size);
++  else
++    return (char *)inet_ntop(AF_INET, (const void*) &addr_v4->sin_addr, buffer, size);
++}
++
++// --------------------------------------------------------------------------
++// Setup tunneling interface and any daemons
++// tspSetupTunnel() will callback here.
++//
++int tspStartLocal(SOCKET socket, tConf *c, tTunnel *t, net_tools_t *nt)
++{
++  TUNNEL_LOOP_CONFIG tun_loop_cfg;
++  int status = NO_ERROR;
++  int keepalive_interval = 0;
++
++  /* Test for root privileges */
++  if(geteuid() != 0)
++  {
++    Display( LOG_LEVEL_1, ELError, "tspStartLocal", HEX_STR_FATAL_NOT_ROOT_FOR_TUN );
++    return INTERFACE_SETUP_FAILED;
++  }
++
++  /* Check Ipv6 support */
++  Display( LOG_LEVEL_2, ELInfo, "tspStartLocal", HEX_STR_CHECKING_LINUX_IPV6_SUPPORT );
++  if( tspTestIPv6Support() == INTERFACE_SETUP_FAILED )
++  {
++    return INTERFACE_SETUP_FAILED;
++  }
++
++  if (t->keepalive_interval != NULL)
++  {
++    keepalive_interval = atoi( t->keepalive_interval );
++    Display( LOG_LEVEL_3, ELInfo, "tspStartLocal", HEX_STR_KEEPALIVE_INTERVAL, t->keepalive_interval );
++  }
++  {
++    int tunfd = (-1);
++
++    // Daemonize!
++    Display( LOG_LEVEL_3, ELInfo, "tspStartLocal", HEX_STR_GOING_DAEMON );
++    if( daemon(1,0) == -1 )
++    {
++      Display( LOG_LEVEL_3, ELError, "tspStartLocal", HEX_STR_CANT_FORK );
++      return INTERFACE_SETUP_FAILED;
++    }
++
++    // Initialize TUN device, if using V6UDPV4 tunnel mode.
++    if( strcasecmp(t->type, STR_CONFIG_TUNNELMODE_V6UDPV4) == 0 )
++    {
++      tunfd = TunInit(c->if_tunnel_v6udpv4);
++      if( tunfd == -1 )
++      {
++        Display( LOG_LEVEL_3, ELError, "tspStartLocal", HEX_STR_CANT_INIT_TUN_DEV );
++        return INTERFACE_SETUP_FAILED;
++      }
++    }
++    // V4V6 tunnel mode is not supported on this platform.
++    else if( strcasecmp(t->type, STR_CONFIG_TUNNELMODE_V4V6) == 0 )
++    {
++      Display( LOG_LEVEL_1, ELError, "tspStartLocal", HEX_STR_NO_V4V6_ON_PLATFORM );
++      return(INTERFACE_SETUP_FAILED);
++    }
++
++    /* Run the template script in a child process, and close socket.
++    //
++    // This is important because otherwise the tunnnel will stay open even
++    // if we get killed
++    */
++    {
++      int pid = fork();
++      if( pid < 0 )
++      {
++        // fork() error
++        return INTERFACE_SETUP_FAILED;
++      }
++      else if (pid == 0)
++      {
++        // Child process:
++        close(tunfd);
++
++        // Execute template script.
++        if (tspSetupInterface(c, t) != 0)
++          exit(INTERFACE_SETUP_FAILED);
++
++        // Successfully executed template script.
++        exit(0);
++      }
++      else
++      {
++        // Parent process
++        int s = 0;
++
++        // Wait for child to exit.
++        Display( LOG_LEVEL_3, ELInfo, "tspStartLocal", HEX_STR_WAITING_FOR_SETUP_SCRIPT );
++        if( wait(&s) == pid )
++        {
++          // ok our child returned
++          if( !WIFEXITED(s) )
++          {
++            Display( LOG_LEVEL_3, ELError, "tspStartLocal", HEX_STR_SCRIPT_FAILED );
++            return INTERFACE_SETUP_FAILED;
++          }
++
++          // Verify child exit code.
++          if( WEXITSTATUS(s) != 0 )
++          {
++            Display( LOG_LEVEL_3, ELError, "tspStartLocal", HEX_STR_SCRIPT_FAILED );
++            return INTERFACE_SETUP_FAILED;
++          }
++          // else everything is fine
++        }
++        else
++        {
++          // Error occured: we have no other child
++          Display( LOG_LEVEL_1, ELError, "tspStartLocal", HEX_STR_ERR_WAITING_SCRIPT );
++          return INTERFACE_SETUP_FAILED;
++        }
++      }
++    }
++
++    if( strcasecmp(t->type, STR_CONFIG_TUNNELMODE_V6UDPV4) == 0 )
++    {
++      status = TunMainLoop( tunfd, socket, c->keepalive,
++                            keepalive_interval, t->client_address_ipv6,
++                            t->keepalive_address);
++
++      /* We got out of V6UDPV4 "TUN" tunnel loop */
++      close(tunfd);
++      tspClose(socket, nt);
++    }
++    else if( strcasecmp(t->type, STR_CONFIG_TUNNELMODE_V6V4) == 0 )
++    {
++      memset( &tun_loop_cfg, 0x00, sizeof(TUNNEL_LOOP_CONFIG) );
++      tun_loop_cfg.ka_interval  = keepalive_interval;
++      tun_loop_cfg.ka_src_addr  = t->client_address_ipv6;
++      tun_loop_cfg.ka_dst_addr  = t->keepalive_address;
++      tun_loop_cfg.sa_family    = AF_INET6;
++      tun_loop_cfg.tun_lifetime = 0;
++
++      status = tspPerformTunnelLoop( &tun_loop_cfg );
++    }
++  }
++
++
++  // Handle tunnel teardown.
++  if( tspTearDownTunnel( c, t ) != 0 )
++  {
++    // Log the error.
++    Display( LOG_LEVEL_2, ELError, "tspStartLocal", HEX_STR_SCRIPT_FAILED );
++  }
++
++  return status;
++}
+diff -Nur tspc-advanced.orig/template/linux.sh tspc-advanced.pld/template/linux.sh
+--- tspc-advanced.orig/template/linux.sh	2007-12-07 12:23:10.000000000 -0700
++++ tspc-advanced.pld/template/linux.sh	2008-02-02 14:27:30.000000000 -0700
 @@ -76,7 +76,6 @@
  Display 1 "--- Start of configuration script. ---"
  Display 1 "Script: " `basename $0`
@@ -21,62 +320,443 @@ diff -ur tspc-advanced-o/template/linux.sh tspc-advanced/template/linux.sh
  route=/sbin/route
  ipconfig=/sbin/ip
  rtadvd=/usr/sbin/radvd
-@@ -107,33 +106,29 @@
-    Display 1 "$TSP_TUNNEL_INTERFACE setup"
-    if [ X"${TSP_TUNNEL_MODE}" = X"v6v4" ]; then
-       Display 1 "Setting up link to $TSP_SERVER_ADDRESS_IPV4"
--      if [ -x $ipconfig ]; then
+@@ -128,7 +127,7 @@
+     fi
+ 
+     # Remove address from TSP HOME INTERFACE
+-    ExecNoCheck $ifconfig $TSP_HOME_INTERFACE inet6 del $TSP_PREFIX::1/64
++    ExecNoCheck $ipconfig address add $TSP_PREFIX::1/64 dev $TSP_HOME_INTERFACE
+   fi
+ 
+   # Delete default IPv6 route(s).
+@@ -141,18 +140,18 @@
+     ExecNoCheck $ipconfig tunnel del $TSP_TUNNEL_INTERFACE
+   else  
+     # Check if interface exists and remove it
+-    $ifconfig $TSP_TUNNEL_INTERFACE >/dev/null 2>/dev/null
++    $ipconfig link show $TSP_TUNNEL_INTERFACE >/dev/null 2>/dev/null
+     if [ $? -eq 0 ]; then
+ 
+       Delete interface IPv6 configuration.
+       PREF=`echo $TSP_CLIENT_ADDRESS_IPV6 | sed "s/:0*/:/g" |cut -d : -f1-2`
+-      OLDADDR=`$ifconfig $TSP_TUNNEL_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 addr: //" -e "s/ Scope.*\$//"`
++      OLDADDR=`$ipconfig addr show dev $TSP_TUNNEL_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 //" -e "s/ scope.*\$//"`
+       if [ ! -z $OLDADDR ]; then
+-        ExecNoCheck $ifconfig $TSP_TUNNEL_INTERFACE inet6 del $OLDADDR
++        ExecNoCheck $ipconfig addr del $OLDADDR dev $TSP_TUNNEL_INTERFACE
+       fi
+ 
+       # Bring interface down
+-      ExecNoCheck $ifconfig $TSP_TUNNEL_INTERFACE down
++      ExecNoCheck $ipconfig link set $TSP_TUNNEL_INTERFACE down
+     fi
+   fi
+   
+@@ -176,24 +175,25 @@
  	 ExecNoCheck $ipconfig tunnel del $TSP_TUNNEL_INTERFACE
  	 ExecNoCheck sleep 1
           Exec $ipconfig tunnel add $TSP_TUNNEL_INTERFACE mode sit ttl 64 remote $TSP_SERVER_ADDRESS_IPV4
--      else
--         Exec $ifconfig $TSP_TUNNEL_INTERFACE tunnel ::$TSP_SERVER_ADDRESS_IPV4
--      fi
++				 Exec $ipconfig link set $TSP_TUNNEL_INTERFACE up
+       else
+          Exec $ifconfig $TSP_TUNNEL_INTERFACE tunnel ::$TSP_SERVER_ADDRESS_IPV4
++				 Exec $ifconfig $TSP_TUNNEL_INTERFACE up
+       fi
     fi
  
 -   Exec $ifconfig $TSP_TUNNEL_INTERFACE up
-+   Exec $ipconfig link set $TSP_TUNNEL_INTERFACE up
  
+    # Clean-up old interface IPv6 configuration.
     PREF=`echo $TSP_CLIENT_ADDRESS_IPV6 | sed "s/:0*/:/g" |cut -d : -f1-2`
 -   OLDADDR=`$ifconfig $TSP_TUNNEL_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 addr: //" -e "s/ Scope.*\$//"`
-+   OLDADDR=`$ipconfig addr show dev $TSP_TUNNEL_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 addr: //" -e "s/ Scope.*\$//"`
++   OLDADDR=`$ipconfig address show dev $TSP_TUNNEL_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 //" -e "s/ scope.*\$//"`
     if [ ! -z $OLDADDR ]; then
        Display 1 "Removing old IPv6 address $OLDADDR"
 -      Exec $ifconfig $TSP_TUNNEL_INTERFACE inet6 del $OLDADDR
-+      Exec $ipconfig addr del $OLDADDR dev $TSP_TUNNEL_INTERFACE
++      Exec $ipconfig address del $OLDADDR dev $TSP_TUNNEL_INTERFACE
     fi
+ 
     Display 1 "This host is: $TSP_CLIENT_ADDRESS_IPV6/$TSP_TUNNEL_PREFIXLEN"
 -   Exec $ifconfig $TSP_TUNNEL_INTERFACE add $TSP_CLIENT_ADDRESS_IPV6/$TSP_TUNNEL_PREFIXLEN
 -   Exec $ifconfig $TSP_TUNNEL_INTERFACE mtu 1280
-+   Exec $ipconfig addr add $TSP_CLIENT_ADDRESS_IPV6/$TSP_TUNNEL_PREFIXLEN dev $TSP_TUNNEL_INTERFACE 
++   Exec $ipconfig address add $TSP_CLIENT_ADDRESS_IPV6/$TSP_TUNNEL_PREFIXLEN dev $TSP_TUNNEL_INTERFACE
 +   Exec $ipconfig link set $TSP_TUNNEL_INTERFACE mtu 1280
+ 
     # 
     # Default route  
-    Display 1 "Adding default route"
--   ExecNoCheck $route -A inet6 del ::/0 2>/dev/null # delete old default route
--   ExecNoCheck $route -A inet6 del 2000::/3 2>/dev/null  # delete old gw route
--   Exec $route -A inet6 add ::/0 dev $TSP_TUNNEL_INTERFACE
--   Exec $route -A inet6 add 2000::/3 dev $TSP_TUNNEL_INTERFACE
-+   ExecNoCheck $ipconfig -6 route add del ::/0 2>/dev/null # delete old default route
-+   ExecNoCheck $ipconfig -6 route del 2000::/3 2>/dev/null  # delete old gw route
-+   Exec $ipconfig -6 route add ::/0 dev $TSP_TUNNEL_INTERFACE
-+   Exec $ipconfig -6 route add 2000::/3 dev $TSP_TUNNEL_INTERFACE
- fi
- 
- # Router configuration if required
-@@ -146,12 +141,12 @@
+@@ -219,13 +219,13 @@
     fi
-    Exec $sysctl -w net.ipv6.conf.all.forwarding=1 # ipv6_forwarding enabled
-    Display 1 "Adding prefix to $TSP_HOME_INTERFACE"
+ 
+    # Add prefix::1 on advertising interface. Clean up before.
 -   OLDADDR=`$ifconfig $TSP_HOME_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 addr: //" -e "s/ Scope.*\$//"`
-+   OLDADDR=`$ipconfig addr show dev $TSP_HOME_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 addr: //" -e "s/ Scope.*\$//"`
++   OLDADDR=`$ipconfig $TSP_HOME_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 //" -e "s/ scope.*\$//"`
     if [ ! -z $OLDADDR ]; then
        Display 1 "Removing old IPv6 address $OLDADDR"
 -      Exec $ifconfig $TSP_HOME_INTERFACE inet6 del $OLDADDR
-+      Exec $ipconfig addr del $OLDADDR dev $TSP_HOME_INTERFACE
++      Exec $ipconfig address del $OLDADDR dev $TSP_HOME_INTERFACE 
     fi
+    Display 1 "Adding prefix to $TSP_HOME_INTERFACE"
 -   Exec $ifconfig $TSP_HOME_INTERFACE add $TSP_PREFIX::1/64
-+   Exec $ipconfig addr add $TSP_PREFIX::1/64 dev $TSP_HOME_INTERFACE
-    # Router advertisement configuration 
-    Display 1 "Create new $rtadvdconfigfile"
-    echo "##### rtadvd.conf made by Gateway6 Client ####" > "$rtadvdconfigfile"
++   Exec $ipconfig address add $TSP_PREFIX::1/64 dev $TSP_HOME_INTERFACE
+ 
+ 
+    # Stop radvd daemon if it was running. Twice.
+diff -Nur tspc-advanced.orig/template/linux.sh.orig tspc-advanced.pld/template/linux.sh.orig
+--- tspc-advanced.orig/template/linux.sh.orig	1969-12-31 17:00:00.000000000 -0700
++++ tspc-advanced.pld/template/linux.sh.orig	2008-02-02 12:53:45.000000000 -0700
+@@ -0,0 +1,260 @@
++#!/bin/sh
++#
++# $Id$
++#
++# This source code copyright (c) Hexago Inc. 2002-2006.
++#
++# LICENSE NOTICE: You may use and modify this source code only if you
++# have executed a valid license agreement with Hexago Inc. granting
++# you the right to do so, the said license agreement governing such
++# use and modifications.   Copyright or other intellectual property
++# notices are not to be removed from the source code.
++#
++# Note: IPV6 support and tun Support must be enabled before calling this script.
++# 
++
++
++LANGUAGE=C
++
++if [ -z $TSP_VERBOSE ]; then
++   TSP_VERBOSE=0
++fi
++
++KillProcess()
++{
++   if [ ! -z $TSP_VERBOSE ]; then
++      if [ $TSP_VERBOSE -ge 2 ]; then
++         echo killing $*
++      fi
++   fi
++   PID=`ps axww | grep $1 | grep -v grep | awk '{ print $1;}'`
++   echo $PID
++   if [ ! -z $PID ]; then
++      kill $PID
++   fi
++}
++
++Display()
++{
++   if [ -z $TSP_VERBOSE ]; then
++      return;
++   fi
++   if [ $TSP_VERBOSE -lt $1 ]; then
++      return;
++   fi
++   shift
++   echo "$*"
++}
++
++Exec()
++{
++   if [ ! -z $TSP_VERBOSE ]; then
++      if [ $TSP_VERBOSE -ge 2 ]; then
++         echo $*
++      fi
++   fi
++   $* # Execute command
++   if [ $? -ne 0 ]; then
++      echo "Error while executing $1"
++      echo "   Command: $*"
++      exit 1
++   fi
++}
++
++ExecNoCheck()
++{
++   if [ ! -z $TSP_VERBOSE ]; then
++      if [ $TSP_VERBOSE -ge 2 ]; then
++         echo $*
++      fi
++   fi
++   $* # Execute command
++}
++
++# Program localization 
++
++Display 1 "--- Start of configuration script. ---"
++Display 1 "Script: " `basename $0`
++
++ifconfig=/sbin/ifconfig
++route=/sbin/route
++ipconfig=/sbin/ip
++rtadvd=/usr/sbin/radvd
++rtadvd_pid=/var/run/radvd/radvd.pid
++sysctl=/sbin/sysctl
++rtadvdconfigfilename=gw6c-rtadvd.conf
++rtadvdconfigfile=$TSP_HOME_DIR/$rtadvdconfigfilename
++
++if [ -z $TSP_HOME_DIR ]; then
++   echo "TSP_HOME_DIR variable not specified!;"
++   exit 1
++fi
++
++if [ ! -d $TSP_HOME_DIR ]; then
++   echo "Error : directory $TSP_HOME_DIR does not exist"
++   exit 1
++fi
++#
++
++if [ -z $TSP_HOST_TYPE ]; then
++   echo Error: TSP_HOST_TYPE not defined.
++   exit 1
++fi
++
++
++#############################################################################
++# Tunnel destruction script.
++#
++#   Is invoked by the Gateway6 Client on shutdown when it receives the 
++#   SIGHUP signal. Use "kill -HUP <gw6c pid>".
++#
++if [ X"${TSP_OPERATION}" = X"TSP_TUNNEL_TEARDOWN" ]; then
++
++  Display 1 Tunnel tear down starting...
++
++
++  # Router deconfiguration.
++  if [ X"${TSP_HOST_TYPE}" = X"router" ]; then
++
++    # Kill router advertisement daemon
++    KillProcess $rtadvdconfigfile
++
++    # Remove prefix routing on TSP_HOME_INTERFACE
++    ExecNoCheck $route -A inet6 del $TSP_PREFIX::/$TSP_PREFIXLEN
++
++    # Remove Blackhole.
++    if [ X"${TSP_PREFIXLEN}" != X"64" ]; then
++      ExecNoCheck $route -A inet6 del $TSP_PREFIX::/$TSP_PREFIXLEN dev lo
++    fi
++
++    # Remove address from TSP HOME INTERFACE
++    ExecNoCheck $ifconfig $TSP_HOME_INTERFACE inet6 del $TSP_PREFIX::1/64
++  fi
++
++  # Delete default IPv6 route(s).
++  ExecNoCheck $route -A inet6 del ::/0     2>/dev/null  # delete default route
++  ExecNoCheck $route -A inet6 del 2000::/3 2>/dev/null  # delete gw route
++
++  # Destroy tunnel interface
++  if [ -x $ipconfig ]; then
++    # Delete tunnel via ipconfig
++    ExecNoCheck $ipconfig tunnel del $TSP_TUNNEL_INTERFACE
++  else  
++    # Check if interface exists and remove it
++    $ifconfig $TSP_TUNNEL_INTERFACE >/dev/null 2>/dev/null
++    if [ $? -eq 0 ]; then
++
++      Delete interface IPv6 configuration.
++      PREF=`echo $TSP_CLIENT_ADDRESS_IPV6 | sed "s/:0*/:/g" |cut -d : -f1-2`
++      OLDADDR=`$ifconfig $TSP_TUNNEL_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 addr: //" -e "s/ Scope.*\$//"`
++      if [ ! -z $OLDADDR ]; then
++        ExecNoCheck $ifconfig $TSP_TUNNEL_INTERFACE inet6 del $OLDADDR
++      fi
++
++      # Bring interface down
++      ExecNoCheck $ifconfig $TSP_TUNNEL_INTERFACE down
++    fi
++  fi
++  
++
++  Display 1 Tunnel tear down completed.
++
++  exit 0
++fi
++
++
++#############################################################################
++# Tunnel creation script.
++#
++if [ X"${TSP_HOST_TYPE}" = X"host" ] || [ X"${TSP_HOST_TYPE}" = X"router" ]; then
++
++   # Set tunnel IPv6 configuration
++   Display 1 "$TSP_TUNNEL_INTERFACE setup"
++   if [ X"${TSP_TUNNEL_MODE}" = X"v6v4" ]; then
++      Display 1 "Setting up link to $TSP_SERVER_ADDRESS_IPV4"
++      if [ -x $ipconfig ]; then
++	 ExecNoCheck $ipconfig tunnel del $TSP_TUNNEL_INTERFACE
++	 ExecNoCheck sleep 1
++         Exec $ipconfig tunnel add $TSP_TUNNEL_INTERFACE mode sit ttl 64 remote $TSP_SERVER_ADDRESS_IPV4
++      else
++         Exec $ifconfig $TSP_TUNNEL_INTERFACE tunnel ::$TSP_SERVER_ADDRESS_IPV4
++      fi
++   fi
++
++   Exec $ifconfig $TSP_TUNNEL_INTERFACE up
++
++   # Clean-up old interface IPv6 configuration.
++   PREF=`echo $TSP_CLIENT_ADDRESS_IPV6 | sed "s/:0*/:/g" |cut -d : -f1-2`
++   OLDADDR=`$ifconfig $TSP_TUNNEL_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 addr: //" -e "s/ Scope.*\$//"`
++   if [ ! -z $OLDADDR ]; then
++      Display 1 "Removing old IPv6 address $OLDADDR"
++      Exec $ifconfig $TSP_TUNNEL_INTERFACE inet6 del $OLDADDR
++   fi
++
++   Display 1 "This host is: $TSP_CLIENT_ADDRESS_IPV6/$TSP_TUNNEL_PREFIXLEN"
++   Exec $ifconfig $TSP_TUNNEL_INTERFACE add $TSP_CLIENT_ADDRESS_IPV6/$TSP_TUNNEL_PREFIXLEN
++   Exec $ifconfig $TSP_TUNNEL_INTERFACE mtu 1280
++
++   # 
++   # Default route  
++   Display 1 "Adding default route"
++   ExecNoCheck $route -A inet6 del ::/0 2>/dev/null # delete old default route
++   ExecNoCheck $route -A inet6 del 2000::/3 2>/dev/null  # delete old gw route
++   Exec $route -A inet6 add ::/0 dev $TSP_TUNNEL_INTERFACE
++   Exec $route -A inet6 add 2000::/3 dev $TSP_TUNNEL_INTERFACE
++fi
++
++# Router configuration if required
++if [ X"${TSP_HOST_TYPE}" = X"router" ]; then
++
++   Display 1 "Router configuration"
++
++   # Tell kernel to forward IPv6 traffic.
++   Exec $sysctl -w net.ipv6.conf.all.forwarding=1
++
++   # Blackholing on interface lo, if prefixlen is not 64.
++   if [ X"${TSP_PREFIXLEN}" != X"64" ]; then
++     # Sometimes this route does not show when using 'netstat -rn6'.
++     ExecNoCheck $route -A inet6 add $TSP_PREFIX::/$TSP_PREFIXLEN dev lo 2>/dev/null
++   fi
++
++   # Add prefix::1 on advertising interface. Clean up before.
++   OLDADDR=`$ifconfig $TSP_HOME_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 addr: //" -e "s/ Scope.*\$//"`
++   if [ ! -z $OLDADDR ]; then
++      Display 1 "Removing old IPv6 address $OLDADDR"
++      Exec $ifconfig $TSP_HOME_INTERFACE inet6 del $OLDADDR
++   fi
++   Display 1 "Adding prefix to $TSP_HOME_INTERFACE"
++   Exec $ifconfig $TSP_HOME_INTERFACE add $TSP_PREFIX::1/64
++
++
++   # Stop radvd daemon if it was running. Twice.
++   /etc/init.d/radvd stop
++   if [ -f $rtadvdconfigfile ]; then
++     KillProcess $rtadvdconfigfile
++   fi
++
++   # Create new radvd configuration file.
++   cat > "$rtadvdconfigfile" <<EOF
++##### rtadvd.conf made by Gateway6 Client ####
++interface $TSP_HOME_INTERFACE
++{
++  AdvSendAdvert on;
++  prefix $TSP_PREFIX::/64
++  {
++    AdvOnLink on;
++    AdvAutonomous on;
++  };
++};
++EOF
++
++   # Start the radvd daemon.
++   Display 1 "Starting radvd: $rtadvd -u radvd -C $rtadvdconfigfile"
++   Exec $rtadvd -u radvd -p $rtadvd_pid -C $rtadvdconfigfile
++fi
++
++Display 1 "--- End of configuration script. ---"
++
++exit 0
++
++#---------------------------------------------------------------------
+diff -Nur tspc-advanced.orig/template/linux.sh.rej tspc-advanced.pld/template/linux.sh.rej
+--- tspc-advanced.orig/template/linux.sh.rej	1969-12-31 17:00:00.000000000 -0700
++++ tspc-advanced.pld/template/linux.sh.rej	2008-02-02 12:54:10.000000000 -0700
+@@ -0,0 +1,92 @@
++***************
++*** 107,139 ****
++     Display 1 "$TSP_TUNNEL_INTERFACE setup"
++     if [ X"${TSP_TUNNEL_MODE}" = X"v6v4" ]; then
++        Display 1 "Setting up link to $TSP_SERVER_ADDRESS_IPV4"
++-       if [ -x $ipconfig ]; then
++  	 ExecNoCheck $ipconfig tunnel del $TSP_TUNNEL_INTERFACE
++  	 ExecNoCheck sleep 1
++           Exec $ipconfig tunnel add $TSP_TUNNEL_INTERFACE mode sit ttl 64 remote $TSP_SERVER_ADDRESS_IPV4
++-       else
++-          Exec $ifconfig $TSP_TUNNEL_INTERFACE tunnel ::$TSP_SERVER_ADDRESS_IPV4
++-       fi
++     fi
++  
++-    Exec $ifconfig $TSP_TUNNEL_INTERFACE up
++  
++     PREF=`echo $TSP_CLIENT_ADDRESS_IPV6 | sed "s/:0*/:/g" |cut -d : -f1-2`
++-    OLDADDR=`$ifconfig $TSP_TUNNEL_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 addr: //" -e "s/ Scope.*\$//"`
++     if [ ! -z $OLDADDR ]; then
++        Display 1 "Removing old IPv6 address $OLDADDR"
++-       Exec $ifconfig $TSP_TUNNEL_INTERFACE inet6 del $OLDADDR
++     fi
++     Display 1 "This host is: $TSP_CLIENT_ADDRESS_IPV6/$TSP_TUNNEL_PREFIXLEN"
++-    Exec $ifconfig $TSP_TUNNEL_INTERFACE add $TSP_CLIENT_ADDRESS_IPV6/$TSP_TUNNEL_PREFIXLEN
++-    Exec $ifconfig $TSP_TUNNEL_INTERFACE mtu 1280
++     # 
++     # Default route  
++     Display 1 "Adding default route"
++-    ExecNoCheck $route -A inet6 del ::/0 2>/dev/null # delete old default route
++-    ExecNoCheck $route -A inet6 del 2000::/3 2>/dev/null  # delete old gw route
++-    Exec $route -A inet6 add ::/0 dev $TSP_TUNNEL_INTERFACE
++-    Exec $route -A inet6 add 2000::/3 dev $TSP_TUNNEL_INTERFACE
++  fi
++  
++  # Router configuration if required
++--- 106,134 ----
++     Display 1 "$TSP_TUNNEL_INTERFACE setup"
++     if [ X"${TSP_TUNNEL_MODE}" = X"v6v4" ]; then
++        Display 1 "Setting up link to $TSP_SERVER_ADDRESS_IPV4"
++  	 ExecNoCheck $ipconfig tunnel del $TSP_TUNNEL_INTERFACE
++  	 ExecNoCheck sleep 1
++           Exec $ipconfig tunnel add $TSP_TUNNEL_INTERFACE mode sit ttl 64 remote $TSP_SERVER_ADDRESS_IPV4
++     fi
++  
+++    Exec $ipconfig link set $TSP_TUNNEL_INTERFACE up
++  
++     PREF=`echo $TSP_CLIENT_ADDRESS_IPV6 | sed "s/:0*/:/g" |cut -d : -f1-2`
+++    OLDADDR=`$ipconfig addr show dev $TSP_TUNNEL_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 addr: //" -e "s/ Scope.*\$//"`
++     if [ ! -z $OLDADDR ]; then
++        Display 1 "Removing old IPv6 address $OLDADDR"
+++       Exec $ipconfig addr del $OLDADDR dev $TSP_TUNNEL_INTERFACE
++     fi
++     Display 1 "This host is: $TSP_CLIENT_ADDRESS_IPV6/$TSP_TUNNEL_PREFIXLEN"
+++    Exec $ipconfig addr add $TSP_CLIENT_ADDRESS_IPV6/$TSP_TUNNEL_PREFIXLEN dev $TSP_TUNNEL_INTERFACE 
+++    Exec $ipconfig link set $TSP_TUNNEL_INTERFACE mtu 1280
++     # 
++     # Default route  
++     Display 1 "Adding default route"
+++    ExecNoCheck $ipconfig -6 route add del ::/0 2>/dev/null # delete old default route
+++    ExecNoCheck $ipconfig -6 route del 2000::/3 2>/dev/null  # delete old gw route
+++    Exec $ipconfig -6 route add ::/0 dev $TSP_TUNNEL_INTERFACE
+++    Exec $ipconfig -6 route add 2000::/3 dev $TSP_TUNNEL_INTERFACE
++  fi
++  
++  # Router configuration if required
++***************
++*** 146,157 ****
++     fi
++     Exec $sysctl -w net.ipv6.conf.all.forwarding=1 # ipv6_forwarding enabled
++     Display 1 "Adding prefix to $TSP_HOME_INTERFACE"
++-    OLDADDR=`$ifconfig $TSP_HOME_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 addr: //" -e "s/ Scope.*\$//"`
++     if [ ! -z $OLDADDR ]; then
++        Display 1 "Removing old IPv6 address $OLDADDR"
++-       Exec $ifconfig $TSP_HOME_INTERFACE inet6 del $OLDADDR
++     fi
++-    Exec $ifconfig $TSP_HOME_INTERFACE add $TSP_PREFIX::1/64
++     # Router advertisement configuration 
++     Display 1 "Create new $rtadvdconfigfile"
++     echo "##### rtadvd.conf made by Gateway6 Client ####" > "$rtadvdconfigfile"
++--- 141,152 ----
++     fi
++     Exec $sysctl -w net.ipv6.conf.all.forwarding=1 # ipv6_forwarding enabled
++     Display 1 "Adding prefix to $TSP_HOME_INTERFACE"
+++    OLDADDR=`$ipconfig addr show dev $TSP_HOME_INTERFACE | grep "inet6.* $PREF" | sed -e "s/^.*inet6 addr: //" -e "s/ Scope.*\$//"`
++     if [ ! -z $OLDADDR ]; then
++        Display 1 "Removing old IPv6 address $OLDADDR"
+++       Exec $ipconfig addr del $OLDADDR dev $TSP_HOME_INTERFACE
++     fi
+++    Exec $ipconfig addr add $TSP_PREFIX::1/64 dev $TSP_HOME_INTERFACE
++     # Router advertisement configuration 
++     Display 1 "Create new $rtadvdconfigfile"
++     echo "##### rtadvd.conf made by Gateway6 Client ####" > "$rtadvdconfigfile"
