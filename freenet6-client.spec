@@ -1,13 +1,13 @@
 Summary:	Hexago's TSP Client
 Summary(pl.UTF-8):	Klient TSP Hexago
 Name:		freenet6-client
-Version:	4.2.2
+Version:	5.1
 Release:	1
 License:	HPL 1.0
 Group:		Applications/System
 # Source0: http://www.go6.net/4105/file.asp?file_id=80
-Source0:	gw6c4_2_2src.tar.gz
-# Source0-md5:	5e64305e1408b0d3c2c2a5803692eb93
+Source0:	gw6c-5_1-RELEASE-src.tar.gz
+# Source0-md5:	5c5205dc58e82454a5d55a3efb4bf786
 Source1:	%{name}.init
 Source2:	%{name}.conf
 Patch0:		%{name}-pld.patch
@@ -111,7 +111,6 @@ rm -rf $RPM_BUILD_ROOT
 %attr(754,root,root) %{_initrddir}/*
 %dir %{_datadir}/gw6c
 %dir %{_datadir}/gw6c/template
-%{_datadir}/gw6c/template/checktunnel.sh
 %{_datadir}/gw6c/template/linux.sh
 %{_mandir}/man5/*
 %{_mandir}/man8/*
