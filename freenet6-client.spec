@@ -88,7 +88,7 @@ IPv6 po sieci IPv4 (Internecie).
 
 %install
 rm -rf $RPM_BUILD_ROOT
-install -d $RPM_BUILD_ROOT{%{_sysconfdir}/gw6c,%{_initrddir}}
+install -d $RPM_BUILD_ROOT{%{_sysconfdir}/gw6c,/etc/rc.d/init.d}
 
 %{__make} install \
 	target=linux \
@@ -97,7 +97,7 @@ install -d $RPM_BUILD_ROOT{%{_sysconfdir}/gw6c,%{_initrddir}}
 	install_man=$RPM_BUILD_ROOT%{_mandir} \
 	install_template=$RPM_BUILD_ROOT%{_datadir}/gw6c/template
 
-install %{SOURCE1} $RPM_BUILD_ROOT%{_initrddir}/freenet6
+install %{SOURCE1} $RPM_BUILD_ROOT/etc/rc.d/init.d/freenet6
 install %{SOURCE2} $RPM_BUILD_ROOT%{_sysconfdir}/gw6c/gw6c.conf
 
 %clean
@@ -108,7 +108,7 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{_sbindir}/gw6c
 %dir %{_sysconfdir}/gw6c
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/gw6c/gw6c.conf
-%attr(754,root,root) %{_initrddir}/*
+%attr(754,root,root) /etc/rc.d/init.d/*
 %dir %{_datadir}/gw6c
 %dir %{_datadir}/gw6c/template
 %{_datadir}/gw6c/template/linux.sh
