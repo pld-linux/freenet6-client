@@ -12,6 +12,7 @@ Source1:	%{name}.init
 Source2:	%{name}.conf
 Patch0:		%{name}-pld.patch
 URL:		http://www.freenet6.net/
+BuildRequires:	libstdc++-devel
 Requires(post,preun):	/sbin/chkconfig
 Requires:	glibc >= 2.2.1
 Requires:	iproute2 >= 2.2.4
@@ -103,18 +104,6 @@ install %{SOURCE2} $RPM_BUILD_ROOT%{_sysconfdir}/gw6c/gw6c.conf
 %clean
 rm -rf $RPM_BUILD_ROOT
 
-%files
-%defattr(644,root,root,755)
-%attr(755,root,root) %{_sbindir}/gw6c
-%dir %{_sysconfdir}/gw6c
-%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/gw6c/gw6c.conf
-%attr(754,root,root) /etc/rc.d/init.d/*
-%dir %{_datadir}/gw6c
-%dir %{_datadir}/gw6c/template
-%{_datadir}/gw6c/template/linux.sh
-%{_mandir}/man5/*
-%{_mandir}/man8/*
-
 %post
 /sbin/chkconfig --add freenet6
 if [ -f /var/lock/subsys/freenet6 ]; then
@@ -130,3 +119,15 @@ if [ "$1" = "0" ]; then
 	fi
 	/sbin/chkconfig --del freenet6
 fi
+
+%files
+%defattr(644,root,root,755)
+%attr(755,root,root) %{_sbindir}/gw6c
+%dir %{_sysconfdir}/gw6c
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/gw6c/gw6c.conf
+%attr(754,root,root) /etc/rc.d/init.d/*
+%dir %{_datadir}/gw6c
+%dir %{_datadir}/gw6c/template
+%{_datadir}/gw6c/template/linux.sh
+%{_mandir}/man5/*
+%{_mandir}/man8/*
